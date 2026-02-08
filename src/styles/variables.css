@@ -1,0 +1,42 @@
+:root {
+  /* Colors */
+  --bg-dark: #121212;
+  --bg-card: #1e1e1e;
+  --bg-input: #2a2a2a;
+  --bg-hover: #333333;
+  
+  --text-primary: #eeeeee;
+  --text-secondary: #aaaaaa;
+  --text-muted: #666666;
+
+  --accent: #6366f1; /* Indigo-500 */
+  --accent-hover: #4f46e5; /* Indigo-600 */
+  --accent-light: #818cf8;
+
+  --border-color: #333333;
+  --error: #ef4444;
+  --success: #22c55e;
+  --warning: #eab308;
+
+  /* Spacing */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+
+  /* Borders */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 300ms ease;
+}
