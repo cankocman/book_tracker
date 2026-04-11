@@ -121,3 +121,97 @@ export async function addNote(data: typeof notes.$inferInsert) {
     
     revalidatePath(`/book/${data.bookId}`);
 }
+
+export async function updateNote(id: string, content: string) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+
+    const note = await db.query.notes.findFirst({
+        where: and(eq(notes.id, id), eq(notes.userId, session.user.id))
+    });
+    if (!note) throw new Error("Not found");
+
+    await db.update(notes)
+        .set({ content, updatedAt: new Date() })
+        .where(eq(notes.id, id));
+
+    revalidatePath(`/book/${note.bookId}`);
+}
+
+export async function deleteNote(id: string) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+
+    const note = await db.query.notes.findFirst({
+        where: and(eq(notes.id, id), eq(notes.userId, session.user.id))
+    });
+    if (!note) throw new Error("Not found");
+
+    await db.delete(notes).where(eq(notes.id, id));
+    
+    revalidatePath(`/book/${note.bookId}`);
+}
+
+export async function updateSession(id: string, data: Partial<typeof readingSessions.$inferInsert>) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+
+    const existingSession = await db.query.readingSessions.findFirst({
+        where: and(eq(readingSessions.id, id), eq(readingSessions.userId, session.user.id))
+    });
+    if (!existingSession) throw new Error("Not found");
+
+    await db.update(readingSessions)
+        .set(data)
+        .where(eq(readingSessions.id, id));
+
+    if (data.pagesRead !== undefined && data.pagesRead !== existingSession.pagesRead) {
+        const diff = data.pagesRead - existingSession.pagesRead;
+        const book = await db.query.books.findFirst({
+            where: eq(books.id, existingSession.bookId)
+        });
+        if (book) {
+            const newPage = Math.max(0, Math.min(book.totalPages, (book.currentPage || 0) + diff));
+            const updates: any = { currentPage: newPage };
+            if (newPage === book.totalPages && book.status !== 'read') {
+              updates.status = 'read';
+              updates.finishDate = new Date();
+            } else if (newPage < book.totalPages && book.status === 'read') {
+              updates.status = 'reading';
+              updates.finishDate = null;
+            }
+            await db.update(books).set(updates).where(eq(books.id, book.id));
+        }
+    }
+
+    revalidatePath("/dashboard");
+    revalidatePath(`/book/${existingSession.bookId}`);
+}
+
+export async function deleteSession(id: string) {
+    const session = await auth();
+    if (!session?.user?.id) throw new Error("Unauthorized");
+
+    const existingSession = await db.query.readingSessions.findFirst({
+        where: and(eq(readingSessions.id, id), eq(readingSessions.userId, session.user.id))
+    });
+    if (!existingSession) throw new Error("Not found");
+
+    await db.delete(readingSessions).where(eq(readingSessions.id, id));
+
+    const book = await db.query.books.findFirst({
+        where: eq(books.id, existingSession.bookId)
+    });
+    if (book) {
+        const newPage = Math.max(0, (book.currentPage || 0) - existingSession.pagesRead);
+        const updates: any = { currentPage: newPage };
+        if (newPage < book.totalPages && book.status === 'read') {
+          updates.status = 'reading';
+          updates.finishDate = null;
+        }
+        await db.update(books).set(updates).where(eq(books.id, book.id));
+    }
+
+    revalidatePath("/dashboard");
+    revalidatePath(`/book/${existingSession.bookId}`);
+}

@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useBooks } from '../../../../context/BookContext';
-import { ArrowLeft, BookOpen, Clock, Calendar, CheckCircle, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, BookOpen, Clock, Calendar, CheckCircle, Save, Trash2, Edit2, X } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function BookDetails() {
@@ -13,7 +13,7 @@ export default function BookDetails() {
 
   if (!id) return <div>Invalid Book ID</div>;
   const router = useRouter();
-  const { books, sessions, notes, addSession, addNote, deleteBook } = useBooks();
+  const { books, sessions, notes, addSession, addNote, deleteBook, updateNote, deleteNote, updateSession, deleteSession } = useBooks();
   
   const book = books.find((b: any) => b.id === id);
   const bookSessions = sessions.filter((s: any) => s.bookId === id).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -21,7 +21,15 @@ export default function BookDetails() {
 
   const [activeTab, setActiveTab] = useState('history');
   const [newPage, setNewPage] = useState('');
+  const [newSessionDate, setNewSessionDate] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   const [newNote, setNewNote] = useState('');
+
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editSessionPages, setEditSessionPages] = useState('');
+  const [editSessionDate, setEditSessionDate] = useState('');
+
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editNoteContent, setEditNoteContent] = useState('');
 
   if (!book) {
     return (
@@ -43,9 +51,11 @@ export default function BookDetails() {
     addSession({
       bookId: book.id,
       pagesRead: pagesRead,
-      durationMinutes: 0 // Optional for now
+      durationMinutes: 0, // Optional for now
+      date: new Date(newSessionDate)
     });
     setNewPage('');
+    setNewSessionDate(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   };
 
   const handleAddNote = (e: React.FormEvent) => {
@@ -121,8 +131,8 @@ export default function BookDetails() {
           </div>
 
           {book.status !== 'read' && (
-            <form onSubmit={handleUpdateProgress} className="mt-6 flex gap-4">
-              <div className="flex flex-1 flex-col gap-1">
+            <form onSubmit={handleUpdateProgress} className="mt-6 flex flex-wrap items-end gap-4">
+              <div className="flex flex-1 min-w-[200px] flex-col gap-1">
                 <label className="text-xs font-medium text-[var(--text-secondary)]">I'm now on page:</label>
                 <div className="relative">
                   <input 
@@ -137,7 +147,16 @@ export default function BookDetails() {
                   <span className="absolute right-3 top-2 text-[var(--text-secondary)]">/ {book.totalPages}</span>
                 </div>
               </div>
-              <button type="submit" className="self-end rounded-md bg-[var(--accent)] px-4 py-2 font-medium text-white hover:bg-[var(--accent-hover)] disabled:opacity-50" disabled={!newPage}>Update</button>
+              <div className="flex flex-1 min-w-[200px] flex-col gap-1">
+                 <label className="text-xs font-medium text-[var(--text-secondary)]">Date & Time:</label>
+                 <input 
+                    type="datetime-local" 
+                    className="w-full rounded-md border border-[var(--border-color)] bg-[var(--bg-input)] px-3 py-2 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                    value={newSessionDate} 
+                    onChange={e => setNewSessionDate(e.target.value)}
+                  />
+              </div>
+              <button type="submit" className="rounded-md bg-[var(--accent)] px-4 py-2 font-medium text-white hover:bg-[var(--accent-hover)] disabled:opacity-50" disabled={!newPage}>Update</button>
             </form>
           )}
         </div>
@@ -163,16 +182,62 @@ export default function BookDetails() {
           {activeTab === 'history' && (
             <div className="space-y-3">
               {bookSessions.length > 0 ? (
-                bookSessions.map((session: any) => (
-                  <div key={session.id} className="flex items-center justify-between rounded-lg bg-[var(--bg-card)] p-4 border border-[var(--border-color)]">
-                    <div className="text-[var(--text-secondary)]">
-                      {format(new Date(session.date), 'MMM d, yyyy h:mm a')}
-                    </div>
-                    <div className="text-[var(--text-primary)]">
-                      Read <strong>{session.pagesRead}</strong> pages
-                    </div>
+                bookSessions.map((session: any) => {
+                  const isEditing = editingSessionId === session.id;
+                  
+                  return (
+                  <div key={session.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-lg bg-[var(--bg-card)] p-4 border border-[var(--border-color)]">
+                    {isEditing ? (
+                      <div className="flex flex-1 flex-col sm:flex-row gap-4">
+                         <div className="flex flex-col gap-1 flex-1">
+                           <label className="text-xs text-[var(--text-secondary)]">Pages Read</label>
+                           <input type="number" min="1" className="bg-[var(--bg-input)] border border-[var(--border-color)] rounded px-2 py-1 text-sm text-[var(--text-primary)]" value={editSessionPages} onChange={(e) => setEditSessionPages(e.target.value)} />
+                         </div>
+                         <div className="flex flex-col gap-1 flex-1">
+                           <label className="text-xs text-[var(--text-secondary)]">Date</label>
+                           <input type="datetime-local" className="bg-[var(--bg-input)] border border-[var(--border-color)] rounded px-2 py-1 text-sm text-[var(--text-primary)]" value={editSessionDate} onChange={(e) => setEditSessionDate(e.target.value)} />
+                         </div>
+                         <div className="flex items-end gap-2">
+                           <button onClick={() => {
+                             updateSession(session.id, {
+                               pagesRead: parseInt(editSessionPages),
+                               date: new Date(editSessionDate)
+                             });
+                             setEditingSessionId(null);
+                           }} className="text-green-500 hover:text-green-400 p-1"><Save size={18} /></button>
+                           <button onClick={() => setEditingSessionId(null)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1"><X size={18} /></button>
+                         </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="text-[var(--text-secondary)]">
+                          {format(new Date(session.date), 'MMM d, yyyy h:mm a')}
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-[var(--text-primary)]">
+                            Read <strong>{session.pagesRead}</strong> pages
+                          </div>
+                          <div className="flex items-center gap-2">
+                             <button onClick={() => {
+                               setEditingSessionId(session.id);
+                               setEditSessionPages(session.pagesRead.toString());
+                               setEditSessionDate(format(new Date(session.date), "yyyy-MM-dd'T'HH:mm"));
+                             }} className="text-[var(--text-secondary)] hover:text-blue-400 transition-colors">
+                               <Edit2 size={16} />
+                             </button>
+                             <button onClick={() => {
+                               if (window.confirm("Delete this log?")) {
+                                 deleteSession(session.id);
+                               }
+                             }} className="text-[var(--text-secondary)] hover:text-red-400 transition-colors">
+                               <Trash2 size={16} />
+                             </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
-                ))
+                )})
               ) : (
                 <p className="py-8 text-center text-[var(--text-secondary)]">No reading sessions logged yet.</p>
               )}
@@ -196,12 +261,51 @@ export default function BookDetails() {
               
               <div className="space-y-4">
                 {bookNotes.length > 0 ? (
-                  bookNotes.map((note: any) => (
-                    <div key={note.id} className="rounded-lg bg-[var(--bg-card)] p-4 shadow-sm border border-[var(--border-color)]">
-                      <div className="mb-2 text-xs text-[var(--text-secondary)]">{format(new Date(note.createdAt), 'MMM d, yyyy')}</div>
-                      <p className="whitespace-pre-wrap text-[var(--text-primary)]">{note.content}</p>
+                  bookNotes.map((note: any) => {
+                    const isEditing = editingNoteId === note.id;
+                    const isEdited = note.updatedAt && new Date(note.updatedAt).getTime() > new Date(note.createdAt).getTime() + 1000;
+                    
+                    return (
+                    <div key={note.id} className="rounded-lg bg-[var(--bg-card)] p-4 shadow-sm border border-[var(--border-color)] group relative">
+                      {isEditing ? (
+                         <div className="space-y-3">
+                           <textarea className="w-full rounded border border-[var(--border-color)] bg-[var(--bg-input)] p-3 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]" value={editNoteContent} onChange={(e) => setEditNoteContent(e.target.value)} rows={3} />
+                           <div className="flex gap-2 justify-end">
+                             <button onClick={() => setEditingNoteId(null)} className="px-3 py-1 text-sm bg-[var(--bg-input)] rounded text-[var(--text-primary)] hover:bg-[var(--bg-hover)]">Cancel</button>
+                             <button onClick={() => {
+                               updateNote(note.id, editNoteContent);
+                               setEditingNoteId(null);
+                             }} className="px-3 py-1 text-sm bg-[var(--accent)] rounded text-white hover:bg-[var(--accent-hover)]">Save</button>
+                           </div>
+                         </div>
+                      ) : (
+                         <>
+                           <div className="mb-2 flex items-center justify-between">
+                             <div className="text-xs text-[var(--text-secondary)]">
+                               {format(new Date(note.createdAt), 'MMM d, yyyy')}
+                               {isEdited && <span className="ml-2 italic text-[var(--text-secondary)] opacity-70">(Edited {format(new Date(note.updatedAt), 'MMM d, yyyy')})</span>}
+                             </div>
+                             <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                               <button onClick={() => {
+                                 setEditingNoteId(note.id);
+                                 setEditNoteContent(note.content);
+                               }} className="text-[var(--text-secondary)] hover:text-blue-400">
+                                 <Edit2 size={14} />
+                               </button>
+                               <button onClick={() => {
+                                 if (window.confirm("Delete this note?")) {
+                                   deleteNote(note.id);
+                                 }
+                               }} className="text-[var(--text-secondary)] hover:text-red-400">
+                                 <Trash2 size={14} />
+                               </button>
+                             </div>
+                           </div>
+                           <p className="whitespace-pre-wrap text-[var(--text-primary)]">{note.content}</p>
+                         </>
+                      )}
                     </div>
-                  ))
+                  )})
                 ) : (
                   <p className="py-8 text-center text-[var(--text-secondary)]">No notes yet.</p>
                 )}
