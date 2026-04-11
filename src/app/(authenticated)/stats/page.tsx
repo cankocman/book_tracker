@@ -29,11 +29,13 @@ ChartJS.register(
   ArcElement
 );
 
-type TimeFrame = '7days' | '1month' | '3months' | '6months' | '1year';
+type TimeFrame = '7days' | '1month' | '3months' | '6months' | '1year' | 'custom';
 
 export default function Stats() {
   const { books, sessions, notes } = useBooks();
   const [timeFrame, setTimeFrame] = useState<TimeFrame>('7days');
+  const [customStart, setCustomStart] = useState<string>(format(subDays(new Date(), 30), 'yyyy-MM-dd'));
+  const [customEnd, setCustomEnd] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
 
   const {
     chartLabels,
@@ -46,29 +48,33 @@ export default function Stats() {
     avgDaily,
     avgWeekly
   } = useMemo(() => {
-    const now = new Date();
-    let startDate = new Date();
+    const nowLocal = new Date();
+    let startDate = startOfDay(nowLocal);
+    let endDate = endOfDay(nowLocal);
     let currentTitleText = '';
     
-    if (timeFrame === '7days') { startDate = subDays(now, 6); currentTitleText = 'Reading Activity (Last 7 Days)'; }
-    else if (timeFrame === '1month') { startDate = subMonths(now, 1); currentTitleText = 'Reading Activity (Last Month)'; }
-    else if (timeFrame === '3months') { startDate = subMonths(now, 3); currentTitleText = 'Reading Activity (Last 3 Months)'; }
-    else if (timeFrame === '6months') { startDate = subMonths(now, 6); currentTitleText = 'Reading Activity (Last 6 Months)'; }
-    else if (timeFrame === '1year') { startDate = subYears(now, 1); currentTitleText = 'Reading Activity (Last Year)'; }
-
-    startDate = startOfDay(startDate);
+    if (timeFrame === '7days') { startDate = startOfDay(subDays(nowLocal, 6)); currentTitleText = 'Reading Activity (Last 7 Days)'; }
+    else if (timeFrame === '1month') { startDate = startOfDay(subMonths(nowLocal, 1)); currentTitleText = 'Reading Activity (Last Month)'; }
+    else if (timeFrame === '3months') { startDate = startOfDay(subMonths(nowLocal, 3)); currentTitleText = 'Reading Activity (Last 3 Months)'; }
+    else if (timeFrame === '6months') { startDate = startOfDay(subMonths(nowLocal, 6)); currentTitleText = 'Reading Activity (Last 6 Months)'; }
+    else if (timeFrame === '1year') { startDate = startOfDay(subYears(nowLocal, 1)); currentTitleText = 'Reading Activity (Last Year)'; }
+    else if (timeFrame === 'custom') {
+       startDate = startOfDay(parseISO(customStart));
+       endDate = endOfDay(parseISO(customEnd));
+       currentTitleText = `Reading Activity (${format(startDate, 'MMM d, yyyy')} - ${format(endDate, 'MMM d, yyyy')})`;
+    }
 
     const getSessionDate = (s: any) => typeof s.date === 'string' ? parseISO(s.date) : new Date(s.date);
     const getNoteDate = (n: any) => typeof n.createdAt === 'string' ? parseISO(n.createdAt) : new Date(n.createdAt);
 
     const filteredSessions = sessions.filter((s: any) => {
       const d = getSessionDate(s);
-      return d >= startDate && d <= endOfDay(now);
+      return d >= startDate && d <= endDate;
     });
 
     const filteredNotesItems = notes.filter((n: any) => {
       const d = getNoteDate(n);
-      return d >= startDate && d <= endOfDay(now);
+      return d >= startDate && d <= endDate;
     });
 
     // We consider "Books Read" in this timeframe if they were finished within it, or we can just list books that have sessions in this timeframe.
@@ -80,17 +86,29 @@ export default function Stats() {
     let labels: string[] = [];
     let data: number[] = [];
 
-    if (timeFrame === '7days') {
-      const days = eachDayOfInterval({ start: startDate, end: now });
+    let chartGrouping: 'daily' | 'weekly' | 'monthly' = 'daily';
+    
+    if (timeFrame === '7days') chartGrouping = 'daily';
+    else if (timeFrame === '1month' || timeFrame === '3months') chartGrouping = 'weekly';
+    else if (timeFrame === '6months' || timeFrame === '1year') chartGrouping = 'monthly';
+    else if (timeFrame === 'custom') {
+       const daysDiff = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+       if (daysDiff <= 31) chartGrouping = 'daily';
+       else if (daysDiff <= 180) chartGrouping = 'weekly';
+       else chartGrouping = 'monthly';
+    }
+
+    if (chartGrouping === 'daily') {
+      const days = eachDayOfInterval({ start: startDate, end: endDate });
       labels = days.map(d => format(d, 'MMM d'));
       data = days.map(d => {
         return filteredSessions.reduce((acc: number, s: any) => isSameDay(getSessionDate(s), d) ? acc + s.pagesRead : acc, 0);
       });
-    } else if (timeFrame === '1month' || timeFrame === '3months') {
-      const weeks = eachWeekOfInterval({ start: startDate, end: now }, { weekStartsOn: 1 });
+    } else if (chartGrouping === 'weekly') {
+      const weeks = eachWeekOfInterval({ start: startDate, end: endDate }, { weekStartsOn: 1 });
       labels = weeks.map(w => {
          const end = endOfWeek(w, { weekStartsOn: 1 });
-         return `${format(w, 'MMM d')} - ${format(end > now ? now : end, 'MMM d')}`;
+         return `${format(w, 'MMM d')} - ${format(end > endDate ? endDate : end, 'MMM d')}`;
       });
       data = weeks.map(w => {
          const end = endOfWeek(w, { weekStartsOn: 1 });
@@ -99,8 +117,8 @@ export default function Stats() {
             return sd >= w && sd <= end ? acc + s.pagesRead : acc;
          }, 0);
       });
-    } else if (timeFrame === '6months' || timeFrame === '1year') {
-      const months = eachMonthOfInterval({ start: startDate, end: now });
+    } else if (chartGrouping === 'monthly') {
+      const months = eachMonthOfInterval({ start: startDate, end: endDate });
       labels = months.map(m => format(m, 'MMM yyyy'));
       data = months.map(m => {
          return filteredSessions.reduce((acc: number, s: any) => {
@@ -110,7 +128,7 @@ export default function Stats() {
     }
 
     const totalPages = filteredSessions.reduce((acc: number, s: any) => acc + s.pagesRead, 0);
-    const dayCount = Math.max(1, Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const dayCount = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
     const dailyAvg = Math.round(totalPages / dayCount);
     const weeklyAvg = Math.round(dailyAvg * 7);
 
@@ -125,7 +143,7 @@ export default function Stats() {
       avgDaily: dailyAvg,
       avgWeekly: weeklyAvg
     };
-  }, [sessions, books, notes, timeFrame]);
+  }, [sessions, books, notes, timeFrame, customStart, customEnd]);
 
   const barData = {
     labels: chartLabels,
@@ -214,17 +232,37 @@ export default function Stats() {
           <h1 className="text-3xl font-bold text-[var(--text-primary)]">Statistics</h1>
           <p className="mt-2 text-[var(--text-secondary)]">Your reading habits visualized.</p>
         </div>
-        <select 
-          className="rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] px-4 py-2 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-          value={timeFrame}
-          onChange={(e) => setTimeFrame(e.target.value as TimeFrame)}
-        >
-          <option value="7days">Last 7 Days</option>
-          <option value="1month">Last Month</option>
-          <option value="3months">Last 3 Months</option>
-          <option value="6months">Last 6 Months</option>
-          <option value="1year">Last Year</option>
-        </select>
+        <div className="flex flex-col sm:flex-row gap-2">
+          {timeFrame === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input 
+                type="date" 
+                className="rounded-md border border-[var(--border-color)] bg-[var(--bg-input)] px-2 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+              />
+              <span className="text-[var(--text-secondary)]">-</span>
+              <input 
+                type="date" 
+                className="rounded-md border border-[var(--border-color)] bg-[var(--bg-input)] px-2 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+              />
+            </div>
+          )}
+          <select 
+            className="rounded-md border border-[var(--border-color)] bg-[var(--bg-card)] px-4 py-2 text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+            value={timeFrame}
+            onChange={(e) => setTimeFrame(e.target.value as TimeFrame)}
+          >
+            <option value="7days">Last 7 Days</option>
+            <option value="1month">Last Month</option>
+            <option value="3months">Last 3 Months</option>
+            <option value="6months">Last 6 Months</option>
+            <option value="1year">Last Year</option>
+            <option value="custom">Custom Range</option>
+          </select>
+        </div>
       </header>
       
       {/* Overview Cards */}
