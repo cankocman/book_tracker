@@ -46,11 +46,11 @@ export default function Library() {
             />
           </div>
           
-          <div className="flex rounded-lg bg-[var(--bg-input)] p-1">
+          <div className="flex overflow-x-auto rounded-lg bg-[var(--bg-input)] p-1 no-scrollbar">
             {['all', 'reading', 'want-to-read', 'read'].map((f) => (
               <button 
                 key={f}
-                className={`rounded-md px-3 py-1 text-xs font-medium capitalize transition-all ${
+                className={`whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium capitalize transition-all ${
                   filter === f 
                     ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm' 
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'

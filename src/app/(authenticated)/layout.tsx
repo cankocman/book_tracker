@@ -25,9 +25,9 @@ export default async function AuthenticatedLayout({
 
   return (
     <AuthProvider session={session}>
-      <div className="flex min-h-screen bg-[var(--bg-dark)]">
+      <div className="flex min-h-screen bg-[var(--bg-dark)] flex-col md:flex-row relative">
         <Sidebar />
-        <main className="ml-[250px] w-full p-8">
+        <main className="flex-1 w-full p-4 pt-20 md:ml-[250px] md:p-8 md:pt-8 min-h-screen overflow-x-hidden">
           <BookProvider initialBooks={books} initialSessions={sessions} initialNotes={notes}>
             {children}
           </BookProvider>
